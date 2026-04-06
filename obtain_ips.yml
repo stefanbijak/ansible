@@ -1,0 +1,35 @@
+- name: Collect host inventory data
+  hosts: all
+  gather_facts: no
+  vars:
+    output_dir: "./output"
+
+  tasks:
+    - name: Ensure output directory exists
+      delegate_to: localhost
+      run_once: true
+      file:
+        path: "{{ output_dir }}"
+        state: directory
+
+    - name: Get IPs
+      raw: ip -o -4 addr show up | awk '{print $4}' | cut -d/ -f1 | grep -v "127.0.0.1"
+      register: ip_output
+      
+    - name: Uptime
+      raw: uptime | awk {'print $3'} | tr -d '\r\n'
+      register: _uptime
+
+    - name: Save JSON locally
+      delegate_to: localhost
+      copy:
+        dest: "{{ output_dir }}/{{ inventory_hostname }}.json"
+        content: |
+          {{
+            {
+              'hostname': inventory_hostname,
+              'groups': group_names,
+              'ips': ip_output.stdout_lines,
+              'uptime': _uptime.stdout
+            } | to_nice_json
+          }}
